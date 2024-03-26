@@ -1,0 +1,396 @@
+1. Provide the list of markets in which customer "Atliq Exclusive" operates its business in the APAC region.
+
+Query:
+
+SELECT distinct market 
+FROM gdb023.dim_customer 
+where customer = "Atliq Exclusive" and 	region = "APAC";
+
+Output:
+
+| market       |
+|--------------|
+| India        |
+| Indonesia    |
+| Japan        |
+| Philippines  |
+| South Korea  |
+| Australia    |
+| New Zealand  |
+| Bangladesh   |
+
+
+2. What is the percentage of unique product increase in 2021 vs. 2020? 
+ The final output contains these fields, 
+ unique_products_2020 
+ unique_products_2021 
+ percentage_chg
+
+Approach:
+
+First, I found out the count of distinct products for the fiscal year 2021 and made that query cte1.
+Similarly, I found out the count of distinct products for the fiscal year 2020 and made that query cte2 as well.
+Then, I extracted the required fields from the two tables and obtained the final output.
+
+Query:
+
+with cte1 as (
+SELECT count(distinct(product_code)) as unique_products_2021
+FROM gdb023.fact_sales_monthly
+where fiscal_year = 2021),
+
+cte2 as(
+SELECT count(distinct(product_code)) as unique_products_2020
+FROM gdb023.fact_sales_monthly
+where fiscal_year = 2020)
+select unique_products_2020,
+unique_products_2021,
+round((unique_products_2021-unique_products_2020)*100/unique_products_2020,2) as percentage_chg 
+from cte1, cte2
+
+Output:
+
+| unique_products_2020 | unique_products_2021 | percentage_chg |
+|----------------------|----------------------|--------------------|
+| 245                  | 334                  | 36.33%             |
+
+
+3. Provide a report with all the unique product counts for each segment and sort them in descending order of product counts. The final output contains 2 fields,
+   segment product_count
+
+Query:
+
+SELECT segment,
+count(distinct(product_code)) as product_count 
+FROM gdb023.dim_product
+group by segment
+order by product_count desc;
+
+Output:
+
+| segment       | product_count |
+|---------------|---------------|
+| Notebook      | 129           |
+| Accessories   | 116           |
+| Peripherals   | 84            |
+| Desktop       | 32            |
+| Storage       | 27            |
+| Networking    | 9             |
+
+
+4. Follow-up: Which segment had the most increase in unique products in 2021 vs 2020?
+   The final output contains these fields, 
+   segment 
+   product_count_2020 
+   product_count_2021 
+   difference
+
+Approach:
+
+First, I found distinct products for the fiscal year 2020 and made that query cte1.
+Then, I found distinct products for the fiscal year 2021 and made that query cte2.
+Next, I extracted the fields from both tables and also calculated the difference between product_count_2021 and product_count_2020. 
+Finally, I sorted the query by the difference.
+
+Query:
+
+with cte1 as (SELECT p.segment, 
+count(distinct(s.product_code)) as product_count_2020 
+FROM gdb023.fact_sales_monthly s 
+join dim_product p 
+using(product_code)
+where fiscal_year = 2020
+group by p.segment),
+
+cte2 as (SELECT p.segment, 
+count(distinct(s.product_code)) as product_count_2021 
+FROM gdb023.fact_sales_monthly s 
+join dim_product p 
+using(product_code)
+where fiscal_year = 2021
+group by p.segment)
+
+select segment,product_count_2020,product_count_2021,(product_count_2021-product_count_2020) as difference from cte1 join cte2 using(segment)
+order by difference desc;
+
+Output:
+
+| segment      | product_count_2020 | product_count_2021 | difference |
+|--------------|--------------------|--------------------|------------|
+| Accessories  | 69                 | 103                | 34         |
+| Notebook     | 92                 | 108                | 16         |
+| Peripherals  | 59                 | 75                 | 16         |
+| Desktop      | 7                  | 22                 | 15         |
+| Storage      | 12                 | 17                 | 5          |
+| Networking   | 6                  | 9                  | 3          |
+
+
+5. Get the products that have the highest and lowest manufacturing costs. 
+The final output should contain these fields, 
+product_code 
+product 
+manufacturing_cost
+
+Approach:
+
+First, I joined the dim_product and fact_manufacturing_cost tables.
+Then, as per the requirements, I found the product_code, product, and highest manufacturing_cost by using the ORDER BY DESC on the manufacturing_cost field and applying a LIMIT clause to retrieve a product with the highest cost.
+Similarly, I found a product with the lowest cost by using ORDER BY ASC.
+Finally, I combined the results of the two queries using a UNION statement.
+
+Query:
+
+(select m.product_code,max(p.product) as product_name ,max(m.manufacturing_cost) as cost
+from fact_manufacturing_cost m 
+join dim_product p using (product_code)
+group by m.product_code
+order by cost desc
+limit 1)
+union
+(select m.product_code,min(p.product) as product_name ,min(m.manufacturing_cost) as cost
+from fact_manufacturing_cost m 
+join dim_product p using (product_code)
+group by m.product_code
+order by cost asc
+limit 1)
+
+Output:
+
+| product_code | product_name          | cost    |
+|--------------|-----------------------|---------|
+| A6120110206  | AQ HOME Allin1 Gen 2  | 240.5364|
+| A2118150101  | AQ Master wired x1 Ms | 0.8920  |
+
+
+6. Generate a report that contains the top 5 customers who received an average high pre_invoice_discount_pct for the fiscal year 2021 and in the Indian market. The final output contains            these fields, 
+customer_code 
+customer 
+average_discount_percentage
+
+Approach:
+
+First, I joined the fact_pre_invoice_deductions and dim_customer tables to retrieve the desired information.
+I applied the required conditions in the WHERE clause.
+Lastly, I used ORDER BY DESC and LIMIT 5 to find the top 5 customers.
+
+
+Query:
+
+SELECT p.customer_code,
+c.customer,
+p.pre_invoice_discount_pct FROM gdb023.fact_pre_invoice_deductions p
+join dim_customer c
+using(customer_code)
+where p.fiscal_year = 2021 and c.market = "India"
+order by p.pre_invoice_discount_pct desc
+limit 5;
+
+Output:
+
+| customer_code | customer | pre_invoice_discount_pct |
+|---------------|----------|-------------------------|
+| 90002009      | Flipkart | 0.3083                  |
+| 90002006      | Viveks   | 0.3038                  |
+| 90002003      | Ezone    | 0.3028                  |
+| 90002002      | Croma    | 0.3025                  |
+| 90002016      | Amazon   | 0.2933                  |
+
+
+7. Get the complete report of the Gross sales amount for the customer “Atliq Exclusive” for each month. This analysis helps to get an idea of low and high-performing months and take strategic decisions. The final report contains these columns: 
+Month 
+Year 
+Gross sales Amount
+
+Apporach:
+
+First, I joined the fact_sales_monthly and fact_gross_price tables to extract the gross_price using two columns, product_code and fiscal_year, as the same product has a different price for different fiscal years.
+Next, this table was joined to the dim_customer table using customer_code to extract the customer_name, which we used in the WHERE condition.
+I applied the filter condition for Atliq Exclusive.
+Then, I extracted the month_name from the date.
+I found out the gross_sales_amount as the product of sold_quantity and gross_price.
+Finally, I used GROUP BY month_name and fiscal_year so that we could get the sum of gross_sales_amount for each combination of month and fiscal year.
+
+Query:
+
+select monthname((f.date)) as Month ,
+f.fiscal_year,
+round(sum(g.gross_price*f.sold_quantity),2) as gross_sales_amount from fact_sales_monthly f
+join fact_gross_price g 
+on f.product_code = g.product_code and 
+f.fiscal_year = g.fiscal_year
+join dim_customer c 
+on f.customer_code = c.customer_code
+where c.customer = "Atliq Exclusive"
+group by Month,f.fiscal_year
+order by Month asc ,f.fiscal_year asc
+
+Output:
+
+| Month     | fiscal_year | gross_sales_amount |
+|-----------|-------------|--------------------|
+| April     | 2020        | 395035.35          |
+| April     | 2021        | 7311999.95         |
+| August    | 2020        | 2786648.26         |
+| August    | 2021        | 7178707.59         |
+| December  | 2020        | 4830404.73         |
+| December  | 2021        | 12944659.65        |
+| February  | 2020        | 3996227.77         |
+| February  | 2021        | 10129735.57        |
+| January   | 2020        | 4740600.16         |
+| January   | 2021        | 12399392.98        |
+| July      | 2020        | 2551159.16         |
+| July      | 2021        | 12092346.32        |
+| June      | 2020        | 1695216.60         |
+| June      | 2021        | 9824521.01         |
+| March     | 2020        | 378770.97          |
+| March     | 2021        | 12144061.25        |
+| May       | 2020        | 783813.42          |
+| May       | 2021        | 12150225.01        |
+| November  | 2020        | 7522892.56         |
+| November  | 2021        | 20464999.10        |
+| October   | 2020        | 5135902.35         |
+| October   | 2021        | 13218636.20        |
+| September | 2020        | 4496259.67         |
+| September | 2021        | 12353509.79        |
+
+
+
+8. In which quarter of 2020, got the maximum total_sold_quantity? The final output contains these fields 
+sorted by the total_sold_quantity, 
+Quarter 
+total_sold_quantity
+
+Approach:
+
+Since there is a date column in the fact_sales_monthly table, I needed to use the CASE statement to add a new column called 'quarter'.
+Then, I used the aggregate function sum to obtain the total_sales_quantity. 
+I applied a WHERE condition for the fiscal_year 2020.
+Finally, I used GROUP BY to generate the final output
+
+Query:
+
+select
+case
+when month(date) in (9,10,11) then "Q1"
+when month(date) in (12,1,2) then "Q2"
+when month(date) in (3,4,5) then "Q3"
+when month(date) in (6,7,8) then "Q4"
+end as quater,
+sum(sold_quantity) as total_sales_quantity
+from fact_sales_monthly
+where fiscal_year = 2020
+group by quater
+order by total_sales_quantity desc
+
+Output:
+
+| quater | total_sales_quantity |
+|--------|----------------------|
+| Q1     | 7005619              |
+| Q2     | 6649642              |
+| Q4     | 5042541              |
+| Q3     | 2075087              |
+
+
+
+9. Which channel helped to bring more gross sales in the fiscal year 2021 and the percentage of contribution? The final output contains these fields, 
+channel 
+gross_sales_mln 
+percentage
+
+Approach:
+
+First, I joined the fact_sales_monthly and fact_gross_price tables using product_code and fiscal_year because the product price was different for different fiscal years.then joined the table to dim_customer using customer code 
+applied the filter condition for the fiscal year 2021
+I treated the product of sold_quantity and gross_price as gross sales.
+I used the aggregate function sum to obtain the total gross sales and simultaneously converted it into millions to get the gross_sales_mln.
+and used the group by to find total sales that belong to each channel 
+This allowed me to use gross_sales_mln, which was a calculated column.
+This table was used as cte1 so that I could use the gross_sales_mln column with the window function.
+Finally, I calculated the percentage of contribution by each channel.
+
+Query:
+
+with cte1 as (
+select c.channel,
+round(sum(f.sold_quantity*g.gross_price)/1000000,2) as gross_sales_mln
+from fact_sales_monthly f
+join fact_gross_price g
+on f.product_code = g.product_code and
+f.fiscal_year = g.fiscal_year
+join dim_customer c
+using(customer_code)
+where f.fiscal_year = 2021
+group by c.channel)
+select 
+*,
+gross_sales_mln*100/sum(gross_sales_mln) over() as pct
+from cte1
+order by pct desc
+
+Output:
+
+| channel    | gross_sales_mln | pct       |
+|------------|-----------------|-----------|
+| Retailer   | 1219.08         | 73.233852 |
+| Direct     | 257.53          | 15.470612 |
+| Distributor| 188.03          | 11.295535 |
+
+
+10. Get the Top 3 products in each division that have a high total_sold_quantity in the fiscal_year 2021? The final output contains these fields, 
+division 
+product_code
+product 
+total_sold_quantity 
+rank_order
+
+Approach:
+
+
+First, I joined two tables of product and monthly sales using the product code.
+I filtered the data for the fiscal year 2021.
+Next, I found the sum of sold_quantity using an aggregate function and the GROUP BY clause.
+I used this result as cte1 to utilize the total_sold_quantity, which is a calculated column.
+After that, I applied the window function dense_rank to partition the data by division and order it by total_sold_quantity in descending order.
+I then used this as cte2 so that we could use drnk in a WHERE condition.
+Finally, I applied the condition using the IN operator.
+
+Query:
+
+with cte1 as 
+(
+select p.division,
+f.product_code,
+p.product,
+sum(f.sold_quantity) as total_sold_quantity
+from fact_sales_monthly f
+join dim_product p
+using(product_code)
+where f.fiscal_year = 2021
+group by p.division,f.product_code,p.product
+order by total_sold_quantity desc),
+cte2 as (
+select 
+*,
+dense_rank() over(partition by division order by total_sold_quantity desc) as drnk
+from cte1
+order by drnk asc)
+select * from cte2
+where drnk in (1,2,3)
+order by division
+
+
+Output:
+
+| division | product_code | product              | total_sold_quantity | drnk |
+|----------|--------------|----------------------|---------------------|------|
+| N & S    | A6720160103  | AQ Pen Drive 2 IN 1 | 701373              | 1    |
+| N & S    | A6818160202  | AQ Pen Drive DRC     | 688003              | 2    |
+| N & S    | A6819160203  | AQ Pen Drive DRC     | 676245              | 3    |
+| P & A    | A2319150302  | AQ Gamers Ms         | 428498              | 1    |
+| P & A    | A2520150501  | AQ Maxima Ms         | 419865              | 2    |
+| P & A    | A2520150504  | AQ Maxima Ms         | 419471              | 3    |
+| PC       | A4218110202  | AQ Digit             | 17434               | 1    |
+| PC       | A4319110306  | AQ Velocity          | 17280               | 2    |
+| PC       | A4218110208  | AQ Digit             | 17275               | 3    |
+
